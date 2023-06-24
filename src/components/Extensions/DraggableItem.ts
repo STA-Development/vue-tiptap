@@ -10,7 +10,7 @@ export default Node.create({
 
   content: "block+",
 
-  draggable: false,
+  draggable: true,
 
   parseHTML() {
     return [

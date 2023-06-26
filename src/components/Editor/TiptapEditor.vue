@@ -1,6 +1,6 @@
 <template>
   <node-view-wrapper class="draggable-item">
-    <div
+    <p
       class="drag-handle"
       contenteditable="false"
       draggable="true"

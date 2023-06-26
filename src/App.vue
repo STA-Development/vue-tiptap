@@ -4,11 +4,16 @@
       <editor-content :editor="editor" ref="editorContent" />
       <div class="dropped-items">
         <template v-for="(item, index) in droppedItems" :key="index">
-          <editor-content
-            :content="item"
-            @dragstart="onDragStart(item)"
-            draggable="true"
-          />
+          <div class="drag-row">
+            <editor-content
+              :content="item"
+              @dragstart="onDragStart(item)"
+              draggable="true"
+            />
+            <button class="drag-button" @drag="onDrag" draggable="true">
+              Drag
+            </button>
+          </div>
         </template>
       </div>
     </div>
@@ -24,6 +29,7 @@
 import { Editor, EditorContent } from "@tiptap/vue-3";
 import { StarterKit } from "@tiptap/starter-kit";
 import { BulletList } from "@tiptap/extension-bullet-list";
+import DraggableItem from "./components/Extensions/DraggableItem.ts";
 
 export default {
   components: {
@@ -47,24 +53,62 @@ export default {
             class: "bullet-list",
           },
         }),
+        DraggableItem,
       ],
-    });
-    this.editor.commands.setContent(this.initialContent());
+      editorProps: {
+        handleDOMEvents: {
+          drop: (view, e) => {
+            e.preventDefault();
+          },
+        },
+      },
+      // hide the drop position indicator
+      dropCursor: { width: 0, color: "transparent" },
+      onPaste(view, { type }, slice, moved = false) {
+        // moved is unset on paste events so the fallback of false is used
 
-    // Add the drop event listener to the editor's content element
+        // skip paste events
+        if (type === "paste") return false;
+
+        return !moved;
+      },
+      content: ` <p data-type="draggable-item">This is a boring paragraph.</p>
+        <div >
+
+          <p class="drag-handle">Followed by a fancy draggable item.</p>
+        </div>
+        <div data-type="draggable-item">
+          <p data-type="draggable-item">And another draggable item.</p>
+          <div data-type="draggable-item">
+            <p data-type="draggable-item">And a nested one.</p>
+            <div data-type="draggable-item">
+              <p data-type="draggable-item">But can we go deeper?</p>
+            </div>
+          </div>
+        </div>
+        <p>Let’s finish with a boring paragraph.</p>`,
+    });
+    // this.editor.commands.setContent(this.initialContent());
+
+    // Add the drop and dragover event listeners to the editor's content element
     this.$nextTick(() => {
-      this.$refs.editorContent.$el.addEventListener(
-        "dragstart",
-        this.onDragStart
-      );
-      this.$refs.editorContent.$el.addEventListener("drop", this.onDrop);
+      const editorContentEl = this.$refs.editorContent.$el;
+
+      editorContentEl.addEventListener("dragstart", this.onDragStart);
+      editorContentEl.addEventListener("drop", this.onDrop);
+      editorContentEl.addEventListener("dragover", this.onDragOver);
     });
   },
 
   beforeUnmount() {
-    // Remove the drop event listener when the component is unmounted
+    // Remove the event listeners when the component is unmounted
     this.$nextTick(() => {
-      this.$refs.editorContent.$el.removeEventListener("drag", this.onDrop);
+      const editorContentEl = this.$refs.editorContent.$el;
+
+      editorContentEl.removeEventListener("dragstart", this.onDragStart);
+      editorContentEl.removeEventListener("drop", this.onDrop);
+      editorContentEl.removeEventListener("onMouseUp", this.onDrop);
+      editorContentEl.removeEventListener("dragover", this.onDragOver);
     });
   },
 
@@ -92,26 +136,42 @@ export default {
     },
 
     onDrop(event) {
-      console.log(event);
       event.preventDefault();
+      event.stopPropagation();
+
+      event.returnValue = false;
+
       const coordinates = this.editor.view.posAtCoords({
         left: event.clientX,
         top: event.clientY,
       });
 
-      console.log(this.dragData, 3333);
+      console.log(this.editor);
 
+      console.log(this.dragData);
       if (this.dragData) {
         const droppedItem = this.dragData;
-        console.log(droppedItem);
         this.droppedItems.push(droppedItem);
+        console.log(droppedItem);
         this.editor.commands.insertContentAt(coordinates.pos, droppedItem);
       }
+      return null;
     },
 
-    onDragStart(item) {
-      console.log("1111");
-      this.dragData = item;
+    onDragStart(event) {
+      console.log(event);
+      this.dragData = event.target.innerHTML ?? event.target.textContent;
+    },
+
+    onDrag(event) {
+      console.log(event);
+      // Call the onDrag function when the "Drag" button is dragged
+      console.log("Drag button is being dragged");
+    },
+
+    onDragOver(event) {
+      console.log(event);
+      event.preventDefault(); // Prevent the default drop functionality
     },
   },
 };
@@ -165,5 +225,19 @@ export default {
 
 .editor-container .ProseMirror p:empty::before {
   content: "";
+}
+
+.drag-row {
+  display: flex;
+  align-items: center;
+}
+
+.drag-button {
+  margin-left: 5px;
+  color: #000; /* Add your desired color */
+  background-color: #f0f0f0; /* Add your desired background color */
+  padding: 5px 10px; /* Add your desired padding */
+  border-radius: 4px; /* Add your desired border radius */
+  cursor: move;
 }
 </style>

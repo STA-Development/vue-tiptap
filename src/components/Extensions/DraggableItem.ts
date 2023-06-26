@@ -15,14 +15,14 @@ export default Node.create({
   parseHTML() {
     return [
       {
-        tag: 'div[data-type="draggable-item"]',
+        tag: 'p[data-type="draggable-item"]',
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "div",
+      "p",
       mergeAttributes(HTMLAttributes, { "data-type": "draggable-item" }),
       0,
     ];

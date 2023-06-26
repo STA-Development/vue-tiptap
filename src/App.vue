@@ -1,122 +1,169 @@
 <template>
-  <div class="col mx-2 px-2 py-3 bg-light border rounded">
-    <h6>Todo ✍</h6>
-    <h1>sfasfasfas</h1>
-    <draggable
-      class="draggable-list"
-      :options="dragOptions"
-      :list="tasks.todos"
-      group="tasks"
-    >
-      <template #item="aaaaa">
-        <div>
-          {{ console.log(aaaaa) }}
-          <div>{{ aaaaa.index }}</div>
-
-          <div>2</div>
-        </div>
-      </template>
-    </draggable>
+  <div class="drag-tiptap-editor">
+    <div class="editor-container">
+      <editor-content :editor="editor" ref="editorContent" />
+      <div class="dropped-items">
+        <template v-for="(item, index) in droppedItems" :key="index">
+          <editor-content
+            :content="item"
+            @dragstart="onDragStart(item)"
+            draggable="true"
+          />
+        </template>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button @click="toggleBulletList" :class="{ active: isBulletListActive }">
+        Bullet List
+      </button>
+    </div>
   </div>
-  <div class="col mx-2 px-2 py-3 bg-light border rounded">
-    <draggable
-      v-if="content[0]"
-      class="draggable-list"
-      :list="content"
-      group="tasks"
-    >
-      <template #item="singleItem">
-        <div :key="uuidv4()()" style="position: relative">
-          <div
-            class="drag-options"
-            style="
-              position: absolute;
-              left: -5px;
-              top: -50px;
-              width: 40px;
-              height: 40px;
-              background: red;
-            "
-          ></div>
-          <editor-content :editor="singleItem.element" />
-        </div>
-      </template>
-    </draggable>
-  </div>
-  <!--    </div>-->
-  <!--  </div>-->
 </template>
 
 <script>
-import StarterKit from "@tiptap/starter-kit";
 import { Editor, EditorContent } from "@tiptap/vue-3";
-import draggable from "vuedraggable";
-import { v4 as uuidv4 } from "uuid";
+import { StarterKit } from "@tiptap/starter-kit";
+import { BulletList } from "@tiptap/extension-bullet-list";
+
 export default {
-  methods: {
-    uuidv4() {
-      return uuidv4;
-    },
-  },
   components: {
-    draggable,
     EditorContent,
-  },
-  mounted() {
-    this.content = this.content.map(
-      () =>
-        new Editor({
-          extensions: [StarterKit],
-          content: `
-        <p>This is a boring paragraph.</p>
-        <div data-type="draggable-item">
-          <p>Followed by a fancy draggable item.</p>
-        </div>
-        <div data-type="draggable-item">
-          <p>And another draggable item.</p>
-          <div data-type="draggable-item">
-            <p>And a nested one.</p>
-            <div data-type="draggable-item">
-              <p>But can we go deeper?</p>
-            </div>
-          </div>
-        </div>
-        <p>Let’s finish with a boring paragraph.</p>
-      `,
-        })
-    );
-    console.log(this.content, 111);
   },
   data() {
     return {
-      eachTipTap: { content: "aaa" },
-      // extensions: [new Bold(), new Italic()],
-      content: [null, null],
-      tasks: {
-        ideas: ["Migrate codebase to TypeScript"],
-        todos: ["Dockerize App", "Add vue.draggable to project"],
-        inProgress: ["Implement Web3 Features", "Bump to vite.js"],
-        completed: [],
-      },
-      dragOptions: {
-        handle: ".drag-handle", // CSS class for the handle element
-
-        animation: 200,
-      },
+      editor: null,
+      isBulletListActive: false,
+      droppedItems: [],
+      dragData: null,
     };
+  },
+
+  mounted() {
+    this.editor = new Editor({
+      extensions: [
+        StarterKit,
+        BulletList.configure({
+          HTMLAttributes: {
+            class: "bullet-list",
+          },
+        }),
+      ],
+    });
+    this.editor.commands.setContent(this.initialContent());
+
+    // Add the drop event listener to the editor's content element
+    this.$nextTick(() => {
+      this.$refs.editorContent.$el.addEventListener(
+        "dragstart",
+        this.onDragStart
+      );
+      this.$refs.editorContent.$el.addEventListener("drop", this.onDrop);
+    });
+  },
+
+  beforeUnmount() {
+    // Remove the drop event listener when the component is unmounted
+    this.$nextTick(() => {
+      this.$refs.editorContent.$el.removeEventListener("drag", this.onDrop);
+    });
+  },
+
+  methods: {
+    initialContent() {
+      return {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: "Drag and drop these elements within the editor:",
+              },
+            ],
+          },
+        ],
+      };
+    },
+
+    toggleBulletList() {
+      this.editor.chain().toggleBulletList().run();
+      this.isBulletListActive = this.editor.isActive("bulletList");
+    },
+
+    onDrop(event) {
+      console.log(event);
+      event.preventDefault();
+      const coordinates = this.editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      });
+
+      console.log(this.dragData, 3333);
+
+      if (this.dragData) {
+        const droppedItem = this.dragData;
+        console.log(droppedItem);
+        this.droppedItems.push(droppedItem);
+        this.editor.commands.insertContentAt(coordinates.pos, droppedItem);
+      }
+    },
+
+    onDragStart(item) {
+      console.log("1111");
+      this.dragData = item;
+    },
   },
 };
 </script>
 
-<style scoped>
-h6 {
-  font-weight: 700;
+<style>
+.drag-tiptap-editor {
+  display: flex;
 }
-.col {
-  height: 90vh;
-  overflow: auto;
+
+.editor-container {
+  flex: 1;
+  border: 1px solid #ccc;
+  padding: 10px;
+  position: relative; /* Add this line to position the container */
 }
-.draggable-list > div {
-  cursor: pointer;
+
+.dropped-items {
+  margin-top: 10px;
+}
+
+.toolbar {
+  padding: 10px;
+}
+
+.button {
+  margin-right: 10px;
+}
+
+.bullet-list {
+  list-style-type: disc;
+  margin-left: 20px;
+}
+
+.ProseMirror > * {
+  padding: 20px;
+}
+
+/* Add drag icon */
+.editor-container .ProseMirror p::before {
+  content: "⇄";
+  display: none;
+  position: absolute;
+  left: -1.2em;
+  pointer-events: none; /* Add this line to allow pointer events to pass through */
+}
+
+.editor-container .ProseMirror p:hover::before {
+  display: inline-block;
+}
+
+.editor-container .ProseMirror p:empty::before {
+  content: "";
 }
 </style>

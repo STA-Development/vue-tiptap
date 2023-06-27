@@ -29,9 +29,8 @@ import {
 import { NodeSelection, PluginKey } from "prosemirror-state";
 
 import { Plugin } from "@tiptap/pm/state";
-import { Extension, mergeAttributes } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 import { Paragraph } from "@tiptap/extension-paragraph";
-import { EditorView } from "prosemirror-view";
 
 const CustomParagraph = Paragraph.extend({
   addAttributes() {
@@ -124,7 +123,9 @@ const CustomExtension = Extension.create({
           console.log("1111");
           document.body.appendChild(dropElement);
           return {
-            update(view, prevState) {},
+            update(view, prevState) {
+              console.log(view, prevState);
+            },
             destroy() {
               removeNode(dropElement);
               dropElement = null;
@@ -133,6 +134,7 @@ const CustomExtension = Extension.create({
         },
         props: {
           drop(view, event) {
+            console.log(view, event);
             console.log("$!$$!$!");
             setTimeout(() => {
               let node = document.querySelector(".ProseMirror-hideselection");

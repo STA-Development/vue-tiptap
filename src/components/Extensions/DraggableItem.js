@@ -1,7 +1,7 @@
 import { mergeAttributes, Node } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
 
-import Component from "../Editor/TiptapEditor.vue";
+import Component from "../Editor/TiptapEditor";
 
 export default Node.create({
   name: "draggableItem",
@@ -15,14 +15,14 @@ export default Node.create({
   parseHTML() {
     return [
       {
-        tag: 'p[data-type="draggable-item"]',
+        tag: 'div[data-type="draggable-item"]',
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "p",
+      "div",
       mergeAttributes(HTMLAttributes, { "data-type": "draggable-item" }),
       0,
     ];

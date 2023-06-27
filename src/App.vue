@@ -4,16 +4,7 @@
       <editor-content :editor="editor" ref="editorContent" />
       <div class="dropped-items">
         <template v-for="(item, index) in droppedItems" :key="index">
-          <div class="drag-row">
-            <editor-content
-              :content="item"
-              @dragstart="onDragStart(item)"
-              draggable="true"
-            />
-            <button class="drag-button" @drag="onDrag" draggable="true">
-              Drag
-            </button>
-          </div>
+          <editor-content :content="item" />
         </template>
       </div>
     </div>
@@ -29,7 +20,157 @@
 import { Editor, EditorContent } from "@tiptap/vue-3";
 import { StarterKit } from "@tiptap/starter-kit";
 import { BulletList } from "@tiptap/extension-bullet-list";
-import DraggableItem from "./components/Extensions/DraggableItem.ts";
+import {
+  absoluteRect,
+  dom,
+  removeNode,
+  serializeForClipboard,
+} from "./lib/utils/dom.js";
+import { NodeSelection, PluginKey } from "prosemirror-state";
+
+import { Plugin } from "@tiptap/pm/state";
+import { Extension, mergeAttributes } from "@tiptap/core";
+import { Paragraph } from "@tiptap/extension-paragraph";
+import { EditorView } from "prosemirror-view";
+
+const CustomParagraph = Paragraph.extend({
+  addAttributes() {
+    return {
+      draggable: "true",
+      class: {
+        default: "noteDragHandle",
+        // Take the attribute values
+        renderHTML: (attributes) => {
+          // … and return an object with HTML attributes.
+          return {
+            draggable: "true",
+            class: `${attributes.class}`,
+          };
+        },
+      },
+    };
+  },
+});
+const CustomExtension = Extension.create({
+  get name() {
+    return "CustomExtension";
+  },
+  onCreate() {
+    const brokenClipboardAPI = false;
+
+    function blockPosAtCoords(coords, view) {
+      let pos = view.posAtCoords(coords);
+      let node = view.domAtPos(pos.pos);
+
+      node = node.node;
+      while (node && node.parentNode) {
+        if (node.parentNode.classList.contains("ProseMirror")) {
+          break;
+        }
+        node = node.parentNode;
+      }
+
+      if (node && node.nodeType === 1) {
+        let desc = view.docView.nearestDesc(node, true);
+        if (!(!desc || desc === view.docView)) {
+          return desc.posBefore;
+        }
+      }
+      return null;
+    }
+
+    function dragStart(e, view) {
+      if (!e.dataTransfer) return;
+
+      let coords = { left: e.clientX + 50, top: e.clientY };
+      let pos = blockPosAtCoords(coords, view);
+      if (pos != null) {
+        view.dispatch(
+          view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos))
+        );
+
+        let slice = view.state.selection.content();
+        let { dom, text } = serializeForClipboard(view, slice);
+
+        e.dataTransfer.clearData();
+        e.dataTransfer.setData(
+          brokenClipboardAPI ? "Text" : "text/html",
+          dom.innerHTML
+        );
+        if (!brokenClipboardAPI) e.dataTransfer.setData("text/plain", text);
+
+        view.dragging = { slice, move: true };
+      }
+    }
+
+    let dropElement;
+    const WIDTH = 24;
+
+    return [
+      new Plugin({
+        key: new PluginKey("newPlugin"),
+
+        view(editorView) {
+          console.log(81924781927489);
+          dropElement = dom(
+            "p",
+            {
+              draggable: "true",
+              class: "noteDragHandle",
+              ondragstart: (e) => dragStart(e, editorView),
+            },
+            ["⠿"]
+          );
+          console.log("1111");
+          document.body.appendChild(dropElement);
+          return {
+            update(view, prevState) {},
+            destroy() {
+              removeNode(dropElement);
+              dropElement = null;
+            },
+          };
+        },
+        props: {
+          drop(view, event) {
+            console.log("$!$$!$!");
+            setTimeout(() => {
+              let node = document.querySelector(".ProseMirror-hideselection");
+              if (node) {
+                node.classList.remove("ProseMirror-hideselection");
+              }
+            }, 50);
+          },
+          mousemove(view, event) {
+            let coords = {
+              left: event.clientX + WIDTH + 10,
+              top: event.clientY,
+            };
+            let pos = view.posAtCoords(coords);
+            let node = view.domAtPos(pos.pos);
+
+            node = node.node;
+            while (node && node.parentNode) {
+              if (node.parentNode.classList.contains("ProseMirror")) {
+                break;
+              }
+              node = node.parentNode;
+            }
+
+            let rect = absoluteRect(node);
+            let win = node.ownerDocument.defaultView;
+            rect.top += win.pageYOffset;
+            rect.left += win.pageXOffset;
+            rect.width = WIDTH + "px";
+
+            dropElement.style.left = -WIDTH + rect.left + "px";
+            dropElement.style.top = rect.top + "px";
+          },
+        },
+      }),
+    ];
+  },
+});
 
 export default {
   components: {
@@ -41,74 +182,74 @@ export default {
       isBulletListActive: false,
       droppedItems: [],
       dragData: null,
+      dragEvent: null,
     };
   },
 
   mounted() {
     this.editor = new Editor({
       extensions: [
-        StarterKit,
         BulletList.configure({
           HTMLAttributes: {
             class: "bullet-list",
           },
         }),
-        DraggableItem,
+        CustomExtension,
+        CustomParagraph,
+        StarterKit.configure({
+          heading: false,
+        }),
       ],
-      editorProps: {
-        handleDOMEvents: {
-          drop: (view, e) => {
-            e.preventDefault();
-          },
-        },
-      },
-      // hide the drop position indicator
-      dropCursor: { width: 0, color: "transparent" },
-      onPaste(view, { type }, slice, moved = false) {
-        // moved is unset on paste events so the fallback of false is used
 
-        // skip paste events
-        if (type === "paste") return false;
-
-        return !moved;
-      },
-      content: ` <p data-type="draggable-item">This is a boring paragraph.</p>
-        <div >
-
-          <p class="drag-handle">Followed by a fancy draggable item.</p>
+      content: `
+        <ul><li>
+        <p>This is a boring paragraph.</p>
+</li><li>
+        <p>This is a boring paragraph2</p>
+</li><li>
+        <p>This is a boring paragrap3.</p>
+</li></ul>
+        <div data-type="draggable-item">
+          <p>Followed by a fancy draggable item.</p>
         </div>
         <div data-type="draggable-item">
-          <p data-type="draggable-item">And another draggable item.</p>
+          <p>And another draggable item.</p>
           <div data-type="draggable-item">
-            <p data-type="draggable-item">And a nested one.</p>
+            <p>And a nested one.</p>
             <div data-type="draggable-item">
-              <p data-type="draggable-item">But can we go deeper?</p>
+              <p>But can we go deeper?</p>
             </div>
           </div>
         </div>
-        <p>Let’s finish with a boring paragraph.</p>`,
+        <p>Let’s finish with a boring paragraph.</p>
+      `,
     });
+
+    const plugin = this.editor.state;
+
+    console.log(plugin);
+    this.editor.commands.updateAttributes("paragraph", {
+      draggable: "true",
+    });
+    const editorContentEl = this.$refs.editorContent.$el;
+
+    console.log(this.editor);
     // this.editor.commands.setContent(this.initialContent());
 
-    // Add the drop and dragover event listeners to the editor's content element
+    // Add the drop event listener to the editor's content element
     this.$nextTick(() => {
-      const editorContentEl = this.$refs.editorContent.$el;
-
+      console.log(this.$refs);
       editorContentEl.addEventListener("dragstart", this.onDragStart);
+    });
+    this.$nextTick(() => {
       editorContentEl.addEventListener("drop", this.onDrop);
-      editorContentEl.addEventListener("dragover", this.onDragOver);
     });
   },
 
   beforeUnmount() {
-    // Remove the event listeners when the component is unmounted
+    // Remove the drop event listener when the component is unmounted
     this.$nextTick(() => {
-      const editorContentEl = this.$refs.editorContent.$el;
-
-      editorContentEl.removeEventListener("dragstart", this.onDragStart);
-      editorContentEl.removeEventListener("drop", this.onDrop);
-      editorContentEl.removeEventListener("onMouseUp", this.onDrop);
-      editorContentEl.removeEventListener("dragover", this.onDragOver);
+      this.$refs.editorContent.$el.removeEventListener("drop", this.onDrop);
     });
   },
 
@@ -129,8 +270,14 @@ export default {
         ],
       };
     },
-
+    onDragStart(event) {
+      console.log(event);
+      console.log(11124124124124);
+      this.dragEvent = event.target;
+      this.dragData = event.target.innerHTML ?? event.target.textContent;
+    },
     toggleBulletList() {
+      console.log(this.editor.chain());
       this.editor.chain().toggleBulletList().run();
       this.isBulletListActive = this.editor.isActive("bulletList");
     },
@@ -154,24 +301,10 @@ export default {
         this.droppedItems.push(droppedItem);
         console.log(droppedItem);
         this.editor.commands.insertContentAt(coordinates.pos, droppedItem);
+        this.dragEvent.remove();
+        this.dragEvent = null;
       }
       return null;
-    },
-
-    onDragStart(event) {
-      console.log(event);
-      this.dragData = event.target.innerHTML ?? event.target.textContent;
-    },
-
-    onDrag(event) {
-      console.log(event);
-      // Call the onDrag function when the "Drag" button is dragged
-      console.log("Drag button is being dragged");
-    },
-
-    onDragOver(event) {
-      console.log(event);
-      event.preventDefault(); // Prevent the default drop functionality
     },
   },
 };
@@ -186,7 +319,6 @@ export default {
   flex: 1;
   border: 1px solid #ccc;
   padding: 10px;
-  position: relative; /* Add this line to position the container */
 }
 
 .dropped-items {
@@ -204,40 +336,5 @@ export default {
 .bullet-list {
   list-style-type: disc;
   margin-left: 20px;
-}
-
-.ProseMirror > * {
-  padding: 20px;
-}
-
-/* Add drag icon */
-.editor-container .ProseMirror p::before {
-  content: "⇄";
-  display: none;
-  position: absolute;
-  left: -1.2em;
-  pointer-events: none; /* Add this line to allow pointer events to pass through */
-}
-
-.editor-container .ProseMirror p:hover::before {
-  display: inline-block;
-}
-
-.editor-container .ProseMirror p:empty::before {
-  content: "";
-}
-
-.drag-row {
-  display: flex;
-  align-items: center;
-}
-
-.drag-button {
-  margin-left: 5px;
-  color: #000; /* Add your desired color */
-  background-color: #f0f0f0; /* Add your desired background color */
-  padding: 5px 10px; /* Add your desired padding */
-  border-radius: 4px; /* Add your desired border radius */
-  cursor: move;
 }
 </style>

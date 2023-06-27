@@ -1,7 +1,7 @@
 <template>
   <node-view-wrapper class="draggable-item">
-    <p
-      class="drag-handle"
+    <div
+      class="drag-handle noteDragHandle"
       contenteditable="false"
       draggable="true"
       data-drag-handle
